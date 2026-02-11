@@ -33,7 +33,7 @@ def detect_project_name(file_path):
     return "project"  # fallback
 
 
-def label_title(project):
+def label_title_summary(project):
     return {
         "Rocket Hydrogen": "Rocket ignited",
         "Horsepower": "Ball lifted",
@@ -201,7 +201,7 @@ def write_summary_to_file(data_dict, interval, start_dt, end_dt, filename):
     last_dt = data_dict["Last Timestamp"]
     counters = data_dict["counters"]
     project_name = data_dict["project_name"]
-    label_text = label_title(project_name)
+    label_text = label_title_summary(project_name)
 
     ui_restart_count = data_dict.get("ui_restart_count", 0)
     arduino_disconnect_count = data_dict.get("arduino_disconnect_count", 0)
