@@ -1,90 +1,147 @@
-import sys
+
 import os
-sys.path.append(os.path.dirname(__file__))
-from data_frame import *
+import re
+from pathlib import Path
+import pandas as pd
 
+from parse_dt_utils import parse_dt
+from data_frame import build_df_cycles, build_df_resume, export_excel, write_summary
+from CONST_n_PLOT import plot_resume, save_plot, ADVANCED_THRESHOLD_S, SW_LIST
 
-def analyze_chliran(file_path, start_dt, end_dt):
-    # === LECTURE ET PARSING ===
-    current_day_index = 0
-    time_ms_list = []
-    button_list = []
-    uv_status_list = []
-    jour_logique_list = []
-    previous_init_reference_time = None
-    prev_raw_time = 0
-    consecutive_init = False
-    is_last_init = False
-    with open(file_path, "r", encoding="utf-8") as f:
-        all_lines = f.readlines()
+PAT_SPLIT_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*-\s*(.+)$")
 
-    init_indices = [i for i, line in enumerate(all_lines) if pattern_init.search(line)]
+PAT_SW = re.compile(r"\b(sw[1-4])\b", re.IGNORECASE)
+PAT_PUSH = re.compile(r"\b(push|pressed|down)\b", re.IGNORECASE)
+PAT_RELEASE = re.compile(r"\b(release|released|up)\b", re.IGNORECASE)
 
-    for idx, line in enumerate(all_lines):
+def _iter_split_files(split_path):
+    if isinstance(split_path, (list, tuple, set)):
+        items = list(split_path)
+    else:
+        items = [split_path]
 
-        match_button = pattern_button.search(line)
-        match_init = pattern_init.search(line)
-        raw_time_match = re.search(r"(\d+)", line)
-        raw_time = int(raw_time_match.group(1))  # trouve le temp sur chaque ligne
-
-        if match_init:
-            if consecutive_init or idx == init_indices[0]:
-                previous_init_reference_time = raw_time
-                continue  # ignorer les init consécutifs
-
-            # Conserver le timestamp de la ligne précédente pour delta
-            if not is_last_init:
-                prev_line = all_lines[idx - 1]
-                prev_match = re.search(r"(\d+)", prev_line)
-                if prev_match:
-                    prev_raw_time = int(prev_match.group(1))
-
-            delta = prev_raw_time - previous_init_reference_time
-            # print(delta, prev_raw_time, previous_init_reference_time)
-
-            if delta > DELTA_TIME:  # 5 heures en ms
-                current_day_index += 1
-
-            previous_init_reference_time = raw_time
-            consecutive_init = True
-
-            is_last_init = idx == init_indices[-1]  # dernier init connu dans le fichier
-            if is_last_init:
-                current_day_index += 1
-                print(f"Dernier init → jour +1 → index {current_day_index}")
+    files = []
+    for item in items:
+        p = Path(item)
+        if p.is_dir():
+            files.extend(sorted(p.glob("*.txt")))
+        elif p.is_file():
+            files.append(p)
         else:
-            consecutive_init = False
+            raise FileNotFoundError(f"split_path introuvable: {p}")
 
-        if match_button:
-            button = match_button.group(2)
-            activated = any(keyword.lower() in line.lower() for keyword in uv_keywords)
+    seen = set()
+    uniq = []
+    for f in files:
+        fp = str(f.resolve())
+        if fp not in seen:
+            seen.add(fp)
+            uniq.append(f)
+    return uniq
 
-            time_ms_list.append(raw_time)
-            button_list.append(button)
-            uv_status_list.append("YES" if activated else "NO")
-            jour_logique_list.append(current_day_index)
+def _classify_action(msg: str):
+    m_sw = PAT_SW.search(msg)
+    if not m_sw:
+        return None, None
+    sw = m_sw.group(1).upper()
 
-    # === ERREUR SI PAS D'INIT
-    if current_day_index == 0:
-        raise ValueError("Aucun 'Init' trouvé : impossible d'assigner les jours.")
+    is_push = bool(PAT_PUSH.search(msg))
+    is_rel = bool(PAT_RELEASE.search(msg))
 
-    df = build_df(time_ms_list, button_list, uv_status_list, jour_logique_list)
-    df = timestamp_to_date(df, start_dt=start_dt)
-    df = organize_df(df)
+    if is_rel and not is_push:
+        return sw, "release"
+    if is_push and not is_rel:
+        return sw, "push"
+    if is_rel and is_push:
+        return sw, "release"
+    return None, None
 
-    df_resume = build_df_resume(df)
+def analyze_from_split(split_path, start_dt, end_dt, mode="save", output_path="", project_name="Chliran"):
+    start_dt = parse_dt(start_dt, "start_dt")
+    end_dt = parse_dt(end_dt, "end_dt")
 
-    df_resume["Date"] = df_resume["Date"].astype(str)
-    df["Date"] = df["Date"].astype(str)
-    # === EXPORT EXCEL À 2 ONGLET ===
-    export_excel(df, df_resume)
-    # === WRITE SUMMARY IN TXT ===
-    write_summary_chliran(df, start_dt, end_dt)
-    # === GRAPHIQUE RESUME===
-    plot_resume(df_resume, start_dt, end_dt)
-    # === GRAPHIQUE PAR SWITCH ===
-    plot_resume_per_SW(df, start_dt, end_dt)
+    split_files = _iter_split_files(split_path)
+    if not split_files:
+        raise ValueError("Aucun fichier .txt trouvé dans split_path.")
 
+    ev = []
+    for fpath in split_files:
+        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                m = PAT_SPLIT_LINE.match(line)
+                if not m:
+                    continue
+                dt = pd.to_datetime(m.group(1), errors="coerce")
+                if pd.isna(dt):
+                    continue
+                if dt < start_dt or dt > end_dt:
+                    continue
+
+                msg = m.group(2).strip()
+                sw, action = _classify_action(msg)
+                if sw is None:
+                    continue
+                if sw not in SW_LIST:
+                    continue
+
+                ev.append((dt, sw, action, msg))
+
+    if not ev:
+        raise ValueError("Aucun événement SW (push/release) détecté dans l’intervalle.")
+
+    ev.sort(key=lambda x: x[0])
+
+    pending_push = {sw: None for sw in SW_LIST}  # sw -> (push_dt, push_msg)
+
+    cycles = []
+    for dt, sw, action, msg in ev:
+        if action == "push":
+            pending_push[sw] = (dt, msg)
+        elif action == "release":
+            if pending_push[sw] is None:
+                continue
+            push_dt, push_msg = pending_push[sw]
+            pending_push[sw] = None
+
+            duration_s = (dt - push_dt).total_seconds()
+            advanced = "YES" if duration_s >= float(ADVANCED_THRESHOLD_S) else "NO"
+
+            cycles.append({
+                "SW": sw,
+                "PushDateTime": push_dt,
+                "ReleaseDateTime": dt,
+                "Duration_s": duration_s,
+                "Advanced": advanced,
+                "Date": push_dt.date(),
+                "PushMsg": push_msg,
+                "ReleaseMsg": msg
+            })
+
+    if not cycles:
+        raise ValueError("Aucun cycle complet (push + release) détecté.")
+
+    df_cycles = build_df_cycles(cycles).sort_values("PushDateTime").reset_index(drop=True)
+    df_resume = build_df_resume(df_cycles)
+
+    plt_obj = plot_resume(df_resume, start_dt, end_dt, title=f"{project_name} - presses per day (general vs advanced)")
+
+    if mode == "save":
+        save_plot(plt_obj, output_path, filename="plot_resume.png")
+        write_summary(df_cycles, start_dt, end_dt, output_path, project_name=project_name)
+        export_excel(df_cycles, df_resume, output_path, project_name=project_name)
+    else:
+        if plt_obj is not None:
+            plt_obj.show()
 
 if __name__ == "__main__":
-    analyze_chliran(FILE_PATH)
+    analyze_from_split(
+        split_path=r"C:\Users\nathans\Downloads\log_test.txt",
+        start_dt="2025-10-05 00:00:00",
+        end_dt="2025-10-06 23:59:59",
+        mode="save",
+        output_path=os.path.expanduser("~/Downloads"),
+        project_name="Chliran"
+    )

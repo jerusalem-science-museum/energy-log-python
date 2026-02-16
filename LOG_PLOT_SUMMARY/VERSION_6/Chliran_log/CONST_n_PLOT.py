@@ -1,65 +1,42 @@
-import re
+
+import pandas as pd
 import matplotlib.pyplot as plt
 import os
-import pandas as pd
 
-# === PARAMÈTRES ===
-FILE_PATH = "graph_and_data/april/LOG_april.TXT"
-# file_path = "graph/april/simulated_log.TXT"
-pattern_button = re.compile(r"(\d+)\s*ms\s*;\s*(SW\d)", re.IGNORECASE)
-pattern_init = re.compile(r"(\d+)\s*ms\s*;\s*init", re.IGNORECASE)
-uv_keywords = ["led UV has activate", "la led UV", "UV a été activée", "UV activée"]
-DELTA_TIME = 3600 * 1000 * 5  # if there are 5 hour between init you can count a day
-DOWNLOAD_DIR = os.path.expanduser("~/Downloads")
+# ===== PARAMS =====
+ADVANCED_THRESHOLD_S = 3.0  # > 3 sec => compteur avancé
+SW_LIST = ["SW1", "SW2", "SW3", "SW4"]
 
-
-
-
-def plot_resume(df_resume, start_dt, end_dt):
-    output_path = os.path.join(DOWNLOAD_DIR, "plot_resume.png")
+def plot_resume(df_resume: pd.DataFrame, start_dt, end_dt, title: str = "Number of presses per day (general vs advanced)"):
+    df_resume = df_resume.copy()
     df_resume["Date"] = pd.to_datetime(df_resume["Date"])
     df_filtered = df_resume[(df_resume["Date"] >= start_dt) & (df_resume["Date"] <= end_dt)].copy()
 
     if df_filtered.empty:
         print("⚠️ Aucun jour dans l'intervalle spécifié pour le résumé.")
-        return
+        return None
 
-    df_filtered.loc[:, "DateStr"] = df_filtered["Date"].dt.strftime("%Y-%m-%d")
+    df_filtered["DateStr"] = df_filtered["Date"].dt.strftime("%Y-%m-%d")
     df_filtered = df_filtered.set_index("DateStr")
 
     plt.figure(figsize=(14, 6))
-    df_filtered["Avec UV"].plot(kind="bar", color="orange", width=0.8)
-    plt.title("Number of pushes per day (UV ACTIVATED)")
+    cols = [c for c in ["General", "Advanced"] if c in df_filtered.columns]
+    if not cols:
+        print("⚠️ Colonnes 'General' / 'Advanced' manquantes dans df_resume.")
+        return None
+    df_filtered[cols].plot(kind="bar", width=0.85)
+    plt.title(title)
     plt.xlabel("Date")
-    plt.ylabel("UV ON")
-    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Count")
+    plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
-    plt.grid(axis='y')
-    plt.savefig(output_path)
-    print(f"📊 Graph saved: {output_path}")
+    plt.grid(axis="y")
+    return plt
 
-
-def plot_resume_per_SW(df, start_dt, end_dt):
-    output_path = os.path.join(DOWNLOAD_DIR, "plot_resume_per_SW.png")
-    df["Date"] = pd.to_datetime(df["Date"])
-    df_uv_on = df[(df["UV_Activated"] == "YES") & (df["Date"] >= start_dt) & (df["Date"] <= end_dt)].copy()
-
-    if df_uv_on.empty:
-        print("⚠️ Aucun appui UV activé dans l'intervalle donné.")
+def save_plot(plt_obj, output_path: str, filename: str = "plot_resume.png"):
+    if plt_obj is None:
         return
-
-    df_uv_on.loc[:, "DateStr"] = df_uv_on["Date"].dt.strftime("%Y-%m-%d")
-    uv_switch_grouped = df_uv_on.groupby(["DateStr", "Button"]).size().unstack(fill_value=0)
-
-    plt.figure(figsize=(14, 6))
-    uv_switch_grouped.plot(kind="bar", stacked=False, figsize=(14, 6), width=0.8)
-    plt.title("Nombre d'appuis AVEC UV par bouton et par jour")
-    plt.xlabel("Date")
-    plt.ylabel("Nombre d'appuis AVEC UV")
-    plt.xticks(rotation=45, ha='right')
-    plt.legend(title="Bouton")
-    plt.tight_layout()
-    plt.grid(axis='y')
-    plt.savefig(output_path)
-    print(f"📊 Graph saved: {output_path}")
-
+    os.makedirs(output_path, exist_ok=True)
+    out = os.path.join(output_path, filename)
+    plt_obj.savefig(out)
+    print(f"📊 Graph saved: {out}")

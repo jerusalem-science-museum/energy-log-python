@@ -1,107 +1,127 @@
-from CONST_n_PLOT import *
 
-def build_df(time_ms_list,button_list,uv_status_list,jour_logique_list):
-    # === DATAFRAME PRINCIPAL ===
-    df = pd.DataFrame({
-        "Time_ms": time_ms_list,
-        "Button": button_list,
-        "UV_Activated": uv_status_list,
-        "Day": jour_logique_list
-    }).reset_index(drop=True)
-    return df
+import pandas as pd
+import os
+from CONST_n_PLOT import ADVANCED_THRESHOLD_S, SW_LIST
 
+def build_df_cycles(cycles):
+    return pd.DataFrame(cycles)
 
-def timestamp_to_date(df,start_dt):
-    # === CONVERSION EN DATES
-    df["Date"] = df["Day"].apply(
-        lambda j: start_dt + pd.Timedelta(days=j)
-    )
-    return df
+def build_df_resume(df_cycles: pd.DataFrame):
+    if df_cycles.empty:
+        return pd.DataFrame(columns=["Date", "General", "Advanced"])
 
-def organize_df(df):
-    # Réorganiser les colonnes dans df
-    cols = df.columns.tolist()
-    cols.remove("Date")
-    cols.remove("Day")
-    cols.insert(1, "Date")  # Position 1 = deuxième colonne (0-indexé)
-    df = df[cols]
-    return df
+    df = df_cycles.copy()
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
+    resume = df.groupby("Date").agg(
+        General=("SW", "count"),
+        Advanced=("Advanced", lambda s: (s == "YES").sum())
+    ).reset_index()
 
-def build_df_resume(df):
-    # === RÉSUMÉ JOURNALIER ===
-    grouped = df.groupby(["Date", "UV_Activated"]).size().unstack(fill_value=0)
-    grouped = grouped.rename(columns={"NO": "Sans UV", "YES": "Avec UV"})
+    for sw in SW_LIST:
+        sw_df = df[df["SW"] == sw]
+        if sw_df.empty:
+            resume[f"{sw}_General"] = 0
+            resume[f"{sw}_Advanced"] = 0
+            continue
 
-    total_on = grouped.get("Avec UV", pd.Series()).sum()
-    total_off = grouped.get("Sans UV", pd.Series()).sum()
-    total_all = total_on + total_off
+        g = sw_df.groupby("Date").size()
+        a = sw_df[sw_df["Advanced"] == "YES"].groupby("Date").size()
 
-    df_resume = pd.DataFrame({
-        "Date": grouped.index,
-        "Avec UV": grouped.get("Avec UV", 0),
-        "Sans UV": grouped.get("Sans UV", 0),
-        "Total avec UV": [total_on] + [None] * (len(grouped) - 1),
-        "Total sans UV": [total_off] + [None] * (len(grouped) - 1),
-        "Total": [total_all] + [None] * (len(grouped) - 1)
-    })
-    return df_resume
+        resume[f"{sw}_General"] = resume["Date"].map(g).fillna(0).astype(int)
+        resume[f"{sw}_Advanced"] = resume["Date"].map(a).fillna(0).astype(int)
 
-def export_excel(df,df_resume):
-    output_path = os.path.join(DOWNLOAD_DIR, f"log_table.xlsx")
-    # === EXPORT EXCEL À 2 ONGLET ===
-    with pd.ExcelWriter(output_path) as writer:
-        df.to_excel(writer, sheet_name="Raw Data", index=False)
-        df_resume.to_excel(writer, sheet_name="Résumé per day", index=False)
+    total_general = int(resume["General"].sum())
+    total_advanced = int(resume["Advanced"].sum())
 
-    print("✅ Excel avec 2 onglets créé : 'log_table.xlsx'")
+    resume["Total_General"] = [total_general] + [None] * (len(resume) - 1)
+    resume["Total_Advanced"] = [total_advanced] + [None] * (len(resume) - 1)
+    resume["Threshold_s"] = [ADVANCED_THRESHOLD_S] + [None] * (len(resume) - 1)
 
+    return resume
 
+def export_excel(df_cycles: pd.DataFrame, df_resume: pd.DataFrame, output_path: str, project_name: str):
+    os.makedirs(output_path, exist_ok=True)
+    out_xlsx = os.path.join(output_path, f"{project_name}_log.xlsx")
 
-def write_summary_chliran(df, start_dt, end_dt):
-    # Convertir la colonne Date
-    project_name = "Chliran"
-    interval = "day"
+    df1 = df_cycles.copy()
+    df2 = df_resume.copy()
 
-    # Convertir et tronquer la colonne Date
-    df["Date"] = pd.to_datetime(df["Date"])
+    for col in ["PushDateTime", "ReleaseDateTime"]:
+        if col in df1.columns:
+            df1[col] = df1[col].astype(str)
+    if "Date" in df1.columns:
+        df1["Date"] = df1["Date"].astype(str)
+    if "Date" in df2.columns:
+        df2["Date"] = df2["Date"].astype(str)
 
-    # Appliquer un filtre strict entre start_dt et end_dt
-    df_filtered = df[(df["Date"] <= end_dt)]
+    with pd.ExcelWriter(out_xlsx) as writer:
+        df1.to_excel(writer, sheet_name="Raw Cycles", index=False)
+        df2.to_excel(writer, sheet_name="Résumé per day", index=False)
 
-    if df_filtered.empty:
-        print("⚠️ Aucun événement dans l’intervalle de temps spécifié.")
+    print(f"✅ Excel créé : {out_xlsx}")
+
+def write_summary(df_cycles: pd.DataFrame, start_dt, end_dt, output_path: str, project_name: str):
+    os.makedirs(output_path, exist_ok=True)
+    out_txt = os.path.join(output_path, f"{project_name}_summary.txt")
+
+    if df_cycles.empty:
+        with open(out_txt, "w", encoding="utf-8") as f:
+            f.write(f"Summary from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}\n")
+            f.write("⚠️ Aucun cycle (push+release) détecté dans l’intervalle.\n")
+        print(f"📄 Résumé sauvegardé dans {out_txt}")
         return
 
-    output_path = os.path.join(DOWNLOAD_DIR, f"{project_name}_summary.txt")
+    df = df_cycles.copy()
+    df["PushDateTime"] = pd.to_datetime(df["PushDateTime"])
+    df["ReleaseDateTime"] = pd.to_datetime(df["ReleaseDateTime"])
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
-    first_dt = df_filtered["Date"].min()
-    last_dt = df_filtered["Date"].max()
+    df_range = df[(df["PushDateTime"] >= start_dt) & (df["PushDateTime"] <= end_dt)]
+    if df_range.empty:
+        with open(out_txt, "w", encoding="utf-8") as f:
+            f.write(f"Summary from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}\n")
+            f.write("⚠️ Aucun cycle (push+release) dans l’intervalle.\n")
+        print(f"📄 Résumé sauvegardé dans {out_txt}")
+        return
 
-    df_range = df_filtered[(df_filtered["Date"] >= first_dt) & (df_filtered["Date"] <= last_dt)]
+    first_dt = df_range["PushDateTime"].min()
+    last_dt = df_range["ReleaseDateTime"].max()
 
-    uv_activated_total = (df_range["UV_Activated"] == "YES").sum()
-    sw_off_total = (df_range["UV_Activated"] == "NO").sum()
-    total_events = len(df_range)
+    total_general = len(df_range)
+    total_advanced = int((df_range["Advanced"] == "YES").sum())
 
-    nb_periods = df_range["Date"].nunique() or 1
+    days_in_split = df_range["Date"].nunique() or 1
+    days_calendar = (end_dt.date() - start_dt.date()).days + 1
+    diff_days = days_calendar - days_in_split
 
-    uv_avg = uv_activated_total / nb_periods
-    sw_off_avg = sw_off_total / nb_periods
-    total_avg = total_events / nb_periods
+    avg_general = total_general / days_in_split
+    avg_advanced = total_advanced / days_in_split
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(f"Summary from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')} "
-                f"({(end_dt - start_dt).days + 1} days)\n")
-        f.write(f"Log data time range: {first_dt.strftime('%Y-%m-%d')} to {last_dt.strftime('%Y-%m-%d')} "
-                f"({(last_dt - first_dt).days + 1} days)\n\n")
+    dur_mean = float(df_range["Duration_s"].mean())
+    dur_max = float(df_range["Duration_s"].max())
 
-        f.write(f"UV activated: {uv_activated_total}\n")
-        f.write(f"Total SW off: {sw_off_total}\n")
-        f.write(f"Total actions: {total_events}\n\n")
+    with open(out_txt, "w", encoding="utf-8") as f:
+        f.write(
+            f"Summary from {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')} "
+            f"({days_calendar} days calendar)\n"
+        )
+        f.write(
+            f"Log cycles time range: {first_dt.strftime('%Y-%m-%d')} to {last_dt.strftime('%Y-%m-%d')}\n\n"
+        )
 
-        f.write(f"Average UV activated per {interval}: {uv_avg:.2f}\n")
-        f.write(f"Average SW off per {interval}: {sw_off_avg:.2f}\n")
-        f.write(f"Average total actions per {interval}: {total_avg:.2f}\n")
+        f.write(f"Advanced threshold (seconds): {ADVANCED_THRESHOLD_S}\n\n")
 
-    print(f"📄 Résumé sauvegardé dans {output_path}")
+        f.write(f"Total General cycles (push+release): {total_general}\n")
+        f.write(f"Total Advanced cycles (> threshold): {total_advanced}\n\n")
+
+        f.write(f"Days present in split-log (unique dates with cycles): {days_in_split}\n")
+        f.write(f"Difference (calendar - split-log): {diff_days}\n\n")
+
+        f.write(f"Average General cycles per day: {avg_general:.2f}\n")
+        f.write(f"Average Advanced cycles per day: {avg_advanced:.2f}\n\n")
+
+        f.write(f"Duration mean (s): {dur_mean:.2f}\n")
+        f.write(f"Duration max (s): {dur_max:.2f}\n")
+
+    print(f"📄 Résumé sauvegardé dans {out_txt}")

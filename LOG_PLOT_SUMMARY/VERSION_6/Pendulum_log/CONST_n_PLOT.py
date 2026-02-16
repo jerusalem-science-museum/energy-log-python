@@ -1,31 +1,23 @@
-import re
+
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-# === PARAMÈTRES ===
-FILE_PATH = r"C:\Users\nathans\Desktop\Museum_of_Science\energy\Pendulum\LOG\LOG_DATA\24-6-2025_start\LOG.TXT"
-pattern_button = re.compile(r"(\d+)\s*ms\s*;\s*Button pressed", re.IGNORECASE)
-pattern_init = re.compile(r"(\d+)\s*ms\s*;\s*Init", re.IGNORECASE)
-motor_keywords = ["Motor activated"]
-DELTA_TIME= 3600*1000*5
-DOWNLOAD_DIR = os.path.expanduser("~/Downloads")
-
-
-def plot_resume(df_resume, start_dt, end_dt):
+def plot_resume(df_resume: pd.DataFrame, start_dt, end_dt, title: str = "Number of pushes per day (motor activate)"):
+    df_resume = df_resume.copy()
     df_resume["Date"] = pd.to_datetime(df_resume["Date"])
     df_filtered = df_resume[(df_resume["Date"] >= start_dt) & (df_resume["Date"] <= end_dt)].copy()
 
     if df_filtered.empty:
         print("⚠️ Aucun jour dans l'intervalle spécifié pour le résumé.")
-        return
+        return None
 
-    df_filtered.loc[:, "DateStr"] = df_filtered["Date"].dt.strftime("%Y-%m-%d")
+    df_filtered["DateStr"] = df_filtered["Date"].dt.strftime("%Y-%m-%d")
     df_filtered = df_filtered.set_index("DateStr")
 
     plt.figure(figsize=(14, 6))
     df_filtered["MOTOR ON"].plot(kind="bar", color="orange", width=0.8)
-    plt.title("Number of pushes per day  (motor activate)")
+    plt.title(title)
     plt.xlabel("Date")
     plt.ylabel("Number of pushes with motor ON")
     plt.xticks(rotation=45, ha='right')
@@ -33,8 +25,10 @@ def plot_resume(df_resume, start_dt, end_dt):
     plt.grid(axis='y')
     return plt
 
-def save_plot(plt,output_path):
-    output_path = os.path.join(output_path, "plot_resume.png")
-    plt.savefig(output_path)
-    print(f"📊 Graph saved: {output_path}")
-
+def save_plot(plt_obj, output_path: str, filename: str = "plot_resume.png"):
+    if plt_obj is None:
+        return
+    os.makedirs(output_path, exist_ok=True)
+    out = os.path.join(output_path, filename)
+    plt_obj.savefig(out)
+    print(f"📊 Graph saved: {out}")
