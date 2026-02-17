@@ -4,7 +4,7 @@ from datetime import datetime
 import pandas as pd
 
 from data_frame import build_df_events, build_df_resume, export_excel, write_summary
-from CONST_n_PLOT import plot_resume, plot_motor_vs_no_action, save_plot
+from CONST_n_PLOT import plot_resume, save_plot
 
 # Split log line format: "YYYY-MM-DD HH:MM:SS - message"
 # We avoid regex + pd.to_datetime per line for performance.
@@ -148,17 +148,14 @@ def analyze_pendulum(split_path, start_dt, end_dt, mode="save", output_path=""):
 
     # Plot (plot_resume filtre déjà par dates)
     plt_obj = plot_resume(df_resume, start_dt, end_dt)
-    plt_compare = plot_motor_vs_no_action(df_resume, start_dt, end_dt)
 
     if mode == "save":
         save_plot(plt_obj, output_path, filename="plot_resume.png")
-        save_plot(plt_compare, output_path, filename="plot_motor_vs_no_action.png")
         write_summary(df, start_dt, end_dt, output_path, project_name="Pendulum")
         export_excel(df, df_resume, output_path, project_name="Pendulum")
     else:
-        # Affiche toutes les figures générées
-        import matplotlib.pyplot as _plt
-        _plt.show()
+        if plt_obj is not None:
+            plt_obj.show()
 
 
 if __name__ == "__main__":

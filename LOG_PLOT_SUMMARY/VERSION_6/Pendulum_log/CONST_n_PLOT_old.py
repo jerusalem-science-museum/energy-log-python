@@ -32,27 +32,3 @@ def save_plot(plt_obj, output_path: str, filename: str = "plot_resume.png"):
     out = os.path.join(output_path, filename)
     plt_obj.savefig(out)
     print(f"📊 Graph saved: {out}")
-
-def plot_motor_vs_no_action(df_resume: pd.DataFrame, start_dt, end_dt,
-                            title: str = "Pendulum - pushes per day (NO ACTION vs MOTOR ON)"):
-    df_resume = df_resume.copy()
-    df_resume["Date"] = pd.to_datetime(df_resume["Date"])
-    df_filtered = df_resume[(df_resume["Date"] >= start_dt) & (df_resume["Date"] <= end_dt)].copy()
-
-    if df_filtered.empty:
-        print("⚠️ Aucun jour dans l'intervalle spécifié pour le résumé.")
-        return None
-
-    df_filtered["DateStr"] = df_filtered["Date"].dt.strftime("%Y-%m-%d")
-    df_filtered = df_filtered.set_index("DateStr")
-
-    # Barres groupées : MOTOR ON vs NO ACTION
-    plt.figure(figsize=(14, 6))
-    df_filtered[["NO ACTION", "MOTOR ON"]].plot(kind="bar", width=0.8)
-    plt.title(title)
-    plt.xlabel("Date")
-    plt.ylabel("Count")
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.grid(axis='y')
-    return plt
