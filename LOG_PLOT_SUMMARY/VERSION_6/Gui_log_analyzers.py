@@ -9,7 +9,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-import generic_log_analysis_new as glan
+import generic_log_analysis as glan
 
 lst_project = [
     "Rocket Hydrogen",
@@ -124,33 +124,7 @@ class LogAnalyzerGUI:
             messagebox.showerror("No file", "Please select at least one log file.")
             return
 
-        # cas spéciaux
-        if proj == "Chliran":
-            try:
-                from Chliran_log import main_chliran
-            except ImportError:
-                messagebox.showerror("Import error", "Module Chliran_log introuvable.")
-                return
-            for path in self.log_file_paths:
-                main_chliran.analyze_chliran(path, start_dt, end_dt)
-            self.try_show_current_matplotlib()
-            return
-
-        if proj == "Pendulum":
-            try:
-                from Pendulum_log import main_pendulum
-            except ImportError:
-                messagebox.showerror("Import error", "Module Pendulum_log introuvable.")
-                return
-            for path in self.log_file_paths:
-                main_pendulum.analyze_pendulum(path, start_dt, end_dt,"run analyze")
-            self.try_show_current_matplotlib()
-            self.last_project_name = proj
-            self.last_start_dt = start_dt
-            self.last_end_dt = end_dt
-            return
-
-        # cas généraux
+        # config events (projets "classiques")
         event_config = {
             "Rocket Hydrogen": "The rocket has ignited",
             "Horsepower": "your horsepower is",
@@ -159,8 +133,9 @@ class LogAnalyzerGUI:
             "Light a Fire": "Peak temperature reached:"
         }
 
+        # === Dispatcher : gère aussi Pendulum/Chliran ===
         try:
-            result = glan.analyze_logs(
+            result, fig = glan.run_analysis_dispatch(
                 files=self.log_file_paths,
                 start_dt=start_dt,
                 end_dt=end_dt,
@@ -176,31 +151,20 @@ class LogAnalyzerGUI:
             messagebox.showinfo("No Data", "No data found in the specified time range.")
             return
 
-        # on crée le graphe (sans sauvegarde)
-        fig = None
-        try:
-            fig = glan.plot_counts(result, self.interval.get())
-        except AttributeError:
-            try:
-                fig = glan.plt_counts(result, self.interval.get())
-            except Exception:
-                fig = None
+        # affiche plot
+        if fig is not None:
+            self.handle_plot_result(fig)
+        else:
+            self.try_show_current_matplotlib()
 
-        # affiche
-        self.handle_plot_result(fig)
-
-        # on garde tout pour le save
+        # store last run for saving
         self.last_figure = fig
         self.last_result = result
         self.last_project_name = proj
         self.last_start_dt = start_dt
         self.last_end_dt = end_dt
 
-        # activer le bouton save
         self.save_button.state(["!disabled"])
-
-        # pas de messagebox ici, comme tu veux
-
     def handle_plot_result(self, fig):
         if fig is None:
             if plt.get_fignums():
@@ -229,43 +193,28 @@ class LogAnalyzerGUI:
         1. L'utilisateur choisit un dossier parent
         2. On crée dedans un dossier {project}_{DD_MM}_to_{DD_MM}
         3. On met dedans:
-           - {project}_{DD_MM}_to_{DD_MM}.png
-           - summary_{project}_{DD_MM}-{DD_MM}.txt
-
-        Cas spécial:
-        - Si le projet est "Pendulum" => on appelle
-          main_pendulum.analyze_pendulum(path, start_dt, end_dt, "save")
-          où path = le dossier créé (target_dir).
-          (Cette fonction est censée sauvegarder elle-même dans ce dossier.)
+           - (classiques) PNG + summary TXT
+           - (Pendulum / Chliran) ce que leurs scripts sauvegardent (Excel + plots + summary)
         """
         if self.last_project_name is None or self.last_start_dt is None or self.last_end_dt is None:
-            print("enter")
             messagebox.showerror("Save", "No analysis to save.")
             return
 
         proj = self.last_project_name
         start_dt = self.last_start_dt
         end_dt = self.last_end_dt
-
         start_md = start_dt.strftime("%d_%m")
         end_md = end_dt.strftime("%d_%m")
 
-        # 1) choisir le dossier parent
-        parent_dir = filedialog.askdirectory(
-            title="Select folder where to create the analysis folder"
-        )
+        parent_dir = filedialog.askdirectory(title="Select folder where to create the analysis folder")
         if not parent_dir:
             return
 
-        # 2) créer le dossier à l'intérieur
         folder_name = f"{proj}_{start_md}_to_{end_md}"
         target_dir = os.path.join(parent_dir, folder_name)
 
         if os.path.exists(target_dir):
-            use_it = messagebox.askyesno(
-                "Folder exists",
-                f"The folder '{folder_name}' already exists.\nUse it and overwrite files inside?"
-            )
+            use_it = messagebox.askyesno("Folder exists", f"The folder '{folder_name}' already exists.\nUse it and overwrite files inside?")
             if not use_it:
                 return
         else:
@@ -275,75 +224,20 @@ class LogAnalyzerGUI:
                 messagebox.showerror("Folder error", f"Could not create folder:\n{e}")
                 return
 
-        # ===== CAS SPECIAL PENDULUM =====
-        if str(proj).strip().lower() == "pendulum":
-            try:
-                from Pendulum_log import main_pendulum
-            except ImportError:
-                messagebox.showerror("Import error", "Module Pendulum_log introuvable.")
-                return
-
-            if not self.log_file_paths:
-                messagebox.showerror("No file", "Please select at least one log file.")
-                return
-
-            try:
-                # On sauvegarde dans target_dir, mais on analyse chaque LOG sélectionné
-                for log_path in self.log_file_paths:
-                    main_pendulum.analyze_pendulum(log_path, start_dt, end_dt, "save", target_dir)
-
-                messagebox.showinfo("Save Complete", "Pendulum analysis has been saved successfully.")
-            except Exception as e:
-                messagebox.showerror("Save Pendulum", f"Could not save Pendulum analysis:\n{e}")
-            return
-
-
-        # ===== CAS NORMAL (autres projets) =====
-        elif self.last_figure is None or self.last_result is None:
-            messagebox.showerror("Save", "No analysis to save.")
-            return
-
-        # 3) chemins des fichiers
-        png_path = os.path.join(target_dir, f"{proj}_{start_md}_to_{end_md}.png")
-        txt_path = os.path.join(target_dir, f"summary_{proj}_{start_md}-{end_md}.txt")
-
-        # 4) si l'un des fichiers existe → demander
-        exists_list = []
-        if os.path.exists(png_path):
-            exists_list.append(os.path.basename(png_path))
-        if os.path.exists(txt_path):
-            exists_list.append(os.path.basename(txt_path))
-
-        if exists_list:
-            listing = "\n".join(exists_list)
-            ok = messagebox.askyesno(
-                "Files exist",
-                f"The following file(s) already exist in this folder:\n{listing}\nOverwrite?"
-            )
-            if not ok:
-                return
-
-        # 5) sauver le PNG
         try:
-            self.last_figure.savefig(png_path)
-        except Exception as e:
-            messagebox.showerror("Save PNG", f"Could not save PNG:\n{e}")
-            return
-
-        # 6) sauver le TXT via le module
-        try:
-            glan.write_summary_to_file(
-                self.last_result,
-                self.interval.get(),
-                start_dt,
-                end_dt,
-                txt_path
+            glan.save_analysis_dispatch(
+                project_name=proj,
+                files=self.log_file_paths,
+                start_dt=start_dt,
+                end_dt=end_dt,
+                interval=self.interval.get(),
+                target_dir=target_dir,
+                fig=self.last_figure,
+                result=self.last_result
             )
-            messagebox.showinfo("Save Complete", "The analysis and summary files have been saved successfully.")
+            messagebox.showinfo("Save Complete", "The analysis has been saved successfully.")
         except Exception as e:
-            messagebox.showerror("Save TXT", f"Could not save TXT:\n{e}")
-            return
-
+            messagebox.showerror("Save", f"Could not save analysis:\n{e}")
     def on_close(self):
         self.root.quit()
         self.root.destroy()

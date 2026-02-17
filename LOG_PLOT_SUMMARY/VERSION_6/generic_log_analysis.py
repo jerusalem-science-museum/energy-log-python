@@ -5,6 +5,162 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 from datetime import datetime
 
+
+
+# =========================
+# Special projects adapters
+# =========================
+import tempfile
+from contextlib import contextmanager
+
+@contextmanager
+def _no_matplotlib_show():
+    """
+    Empêche plt.show() d'ouvrir une fenêtre ou de bloquer (utile dans le GUI).
+    """
+    _orig_show = plt.show
+    try:
+        plt.show = lambda *a, **k: None
+        yield
+    finally:
+        plt.show = _orig_show
+
+def _concat_log_files(files):
+    """
+    Concatène plusieurs logs en un seul fichier temporaire (garde l'ordre).
+    Retourne (path_to_use, temp_to_cleanup_or_None).
+    """
+    if not files:
+        raise ValueError("files is empty")
+
+    if len(files) == 1:
+        return files[0], None
+
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="concat_log_", suffix=".txt")
+    os.close(tmp_fd)
+
+    with open(tmp_path, "w", encoding="utf-8", errors="ignore") as out:
+        for fp in files:
+            with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                out.write(f.read())
+            out.write("\n")
+
+    return tmp_path, tmp_path
+
+def analyze_pendulum_adapter(files, start_dt, end_dt, mode="run", output_dir=None):
+    """
+    Adapter qui utilise Pendulum_log/main_pendulum.py
+    - mode="run" => pas de sauvegarde, retourne la figure créée
+    - mode="save" => sauvegarde dans output_dir (folder)
+    """
+    try:
+        from Pendulum_log import main_pendulum
+    except Exception as e:
+        raise ImportError("Module Pendulum_log introuvable (assure-toi que le dossier Pendulum_log est à côté du GUI).") from e
+
+    file_to_use, tmp = _concat_log_files(files)
+    try:
+        with _no_matplotlib_show():
+            if mode == "save":
+                if not output_dir:
+                    raise ValueError("output_dir est requis pour mode='save'")
+                main_pendulum.analyze_pendulum(file_to_use, start_dt, end_dt, "save", output_dir)
+            else:
+                main_pendulum.analyze_pendulum(file_to_use, start_dt, end_dt, "run analyze")
+        fig = plt.gcf() if plt.get_fignums() else None
+        return {"project_name": "Pendulum", "special": True}, fig
+    finally:
+        if tmp and os.path.isfile(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+def analyze_chliran_adapter(files, start_dt, end_dt, mode="run", output_dir=None):
+    """
+    Adapter qui utilise Chliran_log/main_chliran.py
+    Chliran (dans tes fichiers actuels) sauvegarde via CONST_n_PLOT.DOWNLOAD_DIR.
+    Ici, en mode save, on redirige DOWNLOAD_DIR vers output_dir.
+    """
+    try:
+        from Chliran_log import main_chliran
+        from Chliran_log import CONST_n_PLOT as chl_const
+    except Exception as e:
+        raise ImportError("Module Chliran_log introuvable (assure-toi que le dossier Chliran_log est à côté du GUI).") from e
+
+    file_to_use, tmp = _concat_log_files(files)
+    try:
+        if mode == "save":
+            if not output_dir:
+                raise ValueError("output_dir est requis pour mode='save'")
+            chl_const.DOWNLOAD_DIR = output_dir  # redirect all saves
+        with _no_matplotlib_show():
+            main_chliran.analyze_chliran(file_to_use, start_dt, end_dt)
+
+        fig = plt.gcf() if plt.get_fignums() else None
+        return {"project_name": "Chliran", "special": True}, fig
+    finally:
+        if tmp and os.path.isfile(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+def run_analysis_dispatch(files, start_dt, end_dt, interval, event_config, project_name):
+    """
+    Point d'entrée unique pour le GUI.
+    Retourne (result_dict, fig)
+    - Pour projects "classiques" => result_dict = output analyze_logs, fig = plot_counts(...)
+    - Pour Pendulum/Chliran => result_dict = {"special":True,...}, fig = figure matplotlib créée par leur code
+    """
+    proj = str(project_name).strip()
+    if proj.lower() == "pendulum":
+        return analyze_pendulum_adapter(files, start_dt, end_dt, mode="run")
+    if proj.lower() == "chliran":
+        return analyze_chliran_adapter(files, start_dt, end_dt, mode="run")
+
+    result = analyze_logs(
+        files=files,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        interval=interval,
+        event_config=event_config,
+        project_name=proj
+    )
+    if not result:
+        return None, None
+    fig = plot_counts(result, interval)
+    return result, fig
+
+def save_analysis_dispatch(project_name, files, start_dt, end_dt, interval, target_dir, fig=None, result=None, event_config=None):
+    """
+    Sauvegarde dans target_dir.
+    - Pendulum => appelle son analyse en mode save (Excel + plot + summary)
+    - Chliran => redirige DOWNLOAD_DIR puis appelle son analyse (Excel + plots + summary)
+    - Autres => sauvegarde fig + summary via write_summary_to_file (comme avant)
+    """
+    proj = str(project_name).strip()
+    if proj.lower() == "pendulum":
+        analyze_pendulum_adapter(files, start_dt, end_dt, mode="save", output_dir=target_dir)
+        return
+
+    if proj.lower() == "chliran":
+        analyze_chliran_adapter(files, start_dt, end_dt, mode="save", output_dir=target_dir)
+        return
+
+    # Cas "classiques"
+    if fig is None or result is None:
+        raise ValueError("fig/result manquants pour une sauvegarde classique.")
+    start_md = start_dt.strftime("%d_%m")
+    end_md = end_dt.strftime("%d_%m")
+
+    png_path = os.path.join(target_dir, f"{proj}_{start_md}_to_{end_md}.png")
+    txt_path = os.path.join(target_dir, f"summary_{proj}_{start_md}-{end_md}.txt")
+
+    fig.savefig(png_path)
+    write_summary_to_file(result, interval, start_dt, end_dt, txt_path)
+
+
 # Dossier de sauvegarde par défaut : Téléchargements de l'utilisateur
 DOWNLOAD_DIR = os.path.expanduser("~/Downloads")
 HOUR_BEGIN_DAY = 9

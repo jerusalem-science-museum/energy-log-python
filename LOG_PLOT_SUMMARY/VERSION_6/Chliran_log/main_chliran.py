@@ -1,9 +1,10 @@
 
 import os
+import sys
 import re
 from pathlib import Path
 import pandas as pd
-
+sys.path.append(os.path.dirname(__file__))
 from parse_dt_utils import parse_dt
 from data_frame import build_df_cycles, build_df_resume, export_excel, write_summary
 from CONST_n_PLOT import plot_resume, save_plot, ADVANCED_THRESHOLD_S, SW_LIST
@@ -56,7 +57,7 @@ def _classify_action(msg: str):
         return sw, "release"
     return None, None
 
-def analyze_from_split(split_path, start_dt, end_dt, mode="save", output_path="", project_name="Chliran"):
+def analyze_chliran(split_path, start_dt, end_dt, mode="run", output_path="", project_name="Chliran"):
     start_dt = parse_dt(start_dt, "start_dt")
     end_dt = parse_dt(end_dt, "end_dt")
 
@@ -137,7 +138,7 @@ def analyze_from_split(split_path, start_dt, end_dt, mode="save", output_path=""
             plt_obj.show()
 
 if __name__ == "__main__":
-    analyze_from_split(
+    analyze_chliran(
         split_path=r"C:\Users\nathans\Downloads\log_test.txt",
         start_dt="2025-10-05 00:00:00",
         end_dt="2025-10-06 23:59:59",

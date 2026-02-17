@@ -1,11 +1,12 @@
 
 import os
 import re
+import sys
 from pathlib import Path
 import pandas as pd
 from data_frame import build_df_events, build_df_resume, export_excel, write_summary
 from CONST_n_PLOT import plot_resume, save_plot
-
+sys.path.append(os.path.dirname(__file__))
 # Split log line format: "YYYY-MM-DD HH:MM:SS - message"
 PAT_SPLIT_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*-\s*(.+)$")
 
@@ -43,7 +44,7 @@ def _iter_split_files(split_path):
             uniq.append(f)
     return uniq
 
-def analyze_pendulum_from_split(split_path, start_dt, end_dt, mode="save", output_path=""):
+def analyze_pendulum(split_path, start_dt, end_dt, mode="save", output_path=""):
     start_dt = pd.to_datetime(start_dt)
     end_dt = pd.to_datetime(end_dt)
 
@@ -97,7 +98,7 @@ def analyze_pendulum_from_split(split_path, start_dt, end_dt, mode="save", outpu
             plt_obj.show()
 
 if __name__ == "__main__":
-    analyze_pendulum_from_split(
+    analyze_pendulum(
         split_path=[r"C:\Users\nathans\Downloads\log_2025-09-07_to_2025-09-30.txt", r"C:\Users\nathans\Downloads\log_2025-10-01_to_2025-10-31.txt"],
         start_dt="2025-09-07 00:00:00",
         end_dt="2025-10-31 23:59:59",

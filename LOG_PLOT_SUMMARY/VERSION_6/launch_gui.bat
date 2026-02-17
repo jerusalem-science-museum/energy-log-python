@@ -1,3 +1,3 @@
 @echo off
-start "" pythonw "%~dp0Gui_log_analyzers_final.py"
+start "" pythonw "%~dp0Gui_log_analyzers.py"
 
