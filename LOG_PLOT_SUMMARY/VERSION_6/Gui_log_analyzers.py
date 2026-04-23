@@ -35,6 +35,7 @@ class LogAnalyzerGUI:
 
         # états
         self.log_file_paths = []
+        self.file_name_var = tk.StringVar(value="No files selected")
         self.start_date = tk.StringVar()
         self.start_time = tk.StringVar(value="00:00:00")
         self.end_date = tk.StringVar()
@@ -58,19 +59,19 @@ class LogAnalyzerGUI:
         # fichier
         ttk.Label(self.root, text="Log File(s):").grid(row=0, column=0, sticky="w", **padding)
         self.log_file_path_label = ttk.Label(self.root, text="No file selected", width=50)
-        self.log_file_path_label.grid(row=0, column=1, columnspan=2, sticky="w", **padding)
-        ttk.Button(self.root, text="Browse...", command=self.browse_file).grid(row=0, column=2, **padding)
+        self.log_file_path_label.grid(row=0, column=1, sticky="w", **padding)
+        ttk.Button(self.root, text="Browse...", command=self.browse_file).grid(row=0, column=3, **padding)
 
         # dates
         ttk.Label(self.root, text="Start Date:").grid(row=1, column=0, sticky="w", **padding)
-        self.start_date_entry = DateEntry(self.root, textvariable=self.start_date, date_pattern='yyyy-mm-dd')
+        self.start_date_entry = DateEntry(self.root, textvariable=self.start_date, date_pattern='dd-mm-yyyy')
         self.start_date_entry.grid(row=1, column=1, sticky="w", **padding)
 
         ttk.Label(self.root, text="Hour start:").grid(row=1, column=2, sticky="e", **padding)
         ttk.Entry(self.root, textvariable=self.start_time, width=10).grid(row=1, column=3, sticky="w", **padding)
 
         ttk.Label(self.root, text="End Date:").grid(row=2, column=0, sticky="w", **padding)
-        self.end_date_entry = DateEntry(self.root, textvariable=self.end_date, date_pattern='yyyy-mm-dd')
+        self.end_date_entry = DateEntry(self.root, textvariable=self.end_date, date_pattern='dd-mm-yyyy')
         self.end_date_entry.grid(row=2, column=1, sticky="w", **padding)
 
         ttk.Label(self.root, text="Hour end:").grid(row=2, column=2, sticky="e", **padding)
@@ -104,7 +105,10 @@ class LogAnalyzerGUI:
         )
         if paths:
             self.log_file_paths = list(paths)
-            self.log_file_path_label.config(text=f"{len(paths)} file(s) selected")
+            names = [os.path.basename(f) for f in self.log_file_paths]
+            display_text = ", ".join(names)
+            
+            self.log_file_path_label.config(text=f"Selected: {display_text}")
 
     def run_analysis(self):
         proj = self.exhibits.get()
@@ -215,7 +219,7 @@ class LogAnalyzerGUI:
         if not parent_dir:
             return
 
-        folder_name = f"{proj}_{start_md}_to_{end_md}"
+        folder_name = f"{proj}_{start_dt.strftime('%d-%m-%Y')}_to_{end_dt.strftime('%d-%m-%Y')}"
         target_dir = os.path.join(parent_dir, folder_name)
 
         if os.path.exists(target_dir):
