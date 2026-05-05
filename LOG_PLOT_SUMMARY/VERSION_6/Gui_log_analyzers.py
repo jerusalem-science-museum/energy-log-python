@@ -123,8 +123,8 @@ class LogAnalyzerGUI:
 
         # parse dates
         try:
-            start_dt = datetime.strptime(self.start_date.get() + " " + self.start_time.get(), "%Y-%m-%d %H:%M:%S")
-            end_dt = datetime.strptime(self.end_date.get() + " " + self.end_time.get(), "%Y-%m-%d %H:%M:%S")
+            start_dt = datetime.strptime(self.start_date.get() + " " + self.start_time.get(), "%d-%m-%Y %H:%M:%S")
+            end_dt = datetime.strptime(self.end_date.get() + " " + self.end_time.get(), "%d-%m-%Y %H:%M:%S")
         except ValueError:
             messagebox.showerror("Invalid Input", "Datetime format must be YYYY-MM-DD HH:MM:SS")
             return
