@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import generic_log_analysis as glan
+import subprocess
 
 lst_project = [
     "Rocket Hydrogen",
@@ -52,6 +53,8 @@ class LogAnalyzerGUI:
         self.plot_window = None
 
         self.create_widgets()
+
+ 
 
     def create_widgets(self):
         padding = {'padx': 10, 'pady': 5}
@@ -97,6 +100,51 @@ class LogAnalyzerGUI:
         self.save_button = ttk.Button(self.root, text="Save…", command=self.save_both)
         self.save_button.grid(row=5, column=0, columnspan=4, pady=5)
         self.save_button.state(["disabled"])
+
+        """Create warning label for raw log file Pendulum"""
+        self.pend_note = tk.Label(self.root, 
+                                 text="⚠️ Note: RAW files from SD must be converted via SPLIT_GUI before loading.",
+                                 fg="red", 
+                                 font=("Arial", 10, "bold"),
+                                 wraplength=500)
+
+        exhibits_menu.bind("<<ComboboxSelected>>", self.check_pendulum_selection)
+
+        # Create warning label (Hidden by default)
+        self.pend_note = tk.Label(
+            self.root, 
+            text="⚠️ Note: RAW files from SD must be converted via SPLIT_GUI before loading.", 
+            fg="red", 
+            font=("Arial", 10, "bold"),
+            wraplength=550
+        )
+
+        # New: Add the button to launch SPLIT_GUI (Hidden by default)
+        self.split_button = ttk.Button(
+            self.root, 
+            text="Open SPLIT_GUI Tool", 
+            command=self.open_split_tool
+        )
+
+    def check_pendulum_selection(self, event=None):
+        if self.exhibits.get() == "Pendulum":
+            # Show the note
+            self.pend_note.grid(row=6, column=0, columnspan=4, pady=(10, 0))
+            # Show the button right under it
+            self.split_button.grid(row=7, column=0, columnspan=4, pady=5)
+        else:
+            # Hide both if another project is selected
+            self.pend_note.grid_forget()
+            self.split_button.grid_forget()
+
+    def open_split_tool(self):
+        """Launches the SPLIT_GUI script using the current Python interpreter."""
+        try:
+            # sys.executable ensures it uses the same Python version running the current script
+            script_path = os.path.join(BASE_DIR, "Pendulum_log", "split_gui.py")
+            subprocess.Popen([sys.executable, script_path])
+        except Exception as e:
+            messagebox.showerror("Launch Error", f"Could not start split_gui.py:\n{e}")
 
     def browse_file(self):
         paths = filedialog.askopenfilenames(
@@ -251,16 +299,18 @@ class LogAnalyzerGUI:
         self.root.quit()
         self.root.destroy()
 
+    
 
 if __name__ == "__main__":
     root = tk.Tk()
     window_width = 650
-    window_height = 260
+    window_height = 320
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
     x = int((screen_width - window_width) / 2)
     y = int((screen_height - window_height) / 2)
     root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+   
 
     app = LogAnalyzerGUI(root)
     root.mainloop()

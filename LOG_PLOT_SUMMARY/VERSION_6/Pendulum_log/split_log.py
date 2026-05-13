@@ -179,10 +179,10 @@ def split_log_by_month_with_datetime(file_path: str, start_dt, end_dt, output_di
 
 if __name__ == "__main__":
     split_log_by_month_with_datetime(
-        file_path=r"C:\Users\nathans\Desktop\git_musee\Energy\pendulum\LOG\LOG_DATA\2025\2025-09-07_to_2026-02-09\LOG.TXT",
+        file_path=r"C:\Users\pazb\Downloads\LOG_13.05.2026.TXT",
         start_dt="2025-09-07 00:00:00",
-        end_dt="2026-02-09 23:59:59",
-        output_dir=r"C:\Users\nathans\Downloads"
+        end_dt="2026-05-13 23:59:59",
+        output_dir=r"C:\Users\pazb\Downloads"
     )
 
 
