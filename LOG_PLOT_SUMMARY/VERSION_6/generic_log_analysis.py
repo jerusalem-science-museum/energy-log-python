@@ -26,24 +26,24 @@ import importlib.util
 from pathlib import Path
 
 def _import_by_path(mod_name: str, file_path: str):
-    """Importe un module Python depuis un chemin de fichier (marche même sans __init__.py)."""
+    """Imports a Python module from a file path (works even without __init__.py)."""
     spec = importlib.util.spec_from_file_location(mod_name, file_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Impossible de charger le module {mod_name} depuis {file_path}")
+        raise ImportError(f"Failed to load module {mod_name} from {file_path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 def _try_import_project(project_dir_name: str, main_py: str, const_py: str = None):
-    """Essaie d'importer comme package (si __init__.py) sinon par chemin."""
+    """Attempts to import as a package (if __init__.py exists), otherwise imports by path."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     proj_dir = os.path.join(base_dir, project_dir_name)
 
     if not os.path.isdir(proj_dir):
         raise ImportError(
-            f"Dossier '{project_dir_name}' introuvable.\n"
-            f"Attendu ici: {proj_dir}\n"
-            f"➡️ Mets le dossier {project_dir_name} à côté du GUI."
+            f"Directory '{project_dir_name}' not found.\n"
+            f"Expected at: {proj_dir}\n"
+            f"➡️ Place the {project_dir_name} folder in the same directory as the GUI."
         )
 
     init_py = os.path.join(proj_dir, "__init__.py")
@@ -55,17 +55,17 @@ def _try_import_project(project_dir_name: str, main_py: str, const_py: str = Non
         const_mod = importlib.import_module(f"{pkg}.{Path(const_py).stem}") if const_py else None
         return main_mod, const_mod
 
-    # 2) import par chemin (pas besoin de __init__.py)
+   # 2) Import by path (no __init__.py required)
     main_path = os.path.join(proj_dir, main_py)
     if not os.path.isfile(main_path):
-        raise ImportError(f"Fichier introuvable: {main_path}")
+        raise ImportError(f"File not found: {main_path}")
     main_mod = _import_by_path(f"{project_dir_name}_{Path(main_py).stem}", main_path)
 
     const_mod = None
     if const_py:
         const_path = os.path.join(proj_dir, const_py)
         if not os.path.isfile(const_path):
-            raise ImportError(f"Fichier introuvable: {const_path}")
+            raise ImportError(f"File not found: {const_path}")
         const_mod = _import_by_path(f"{project_dir_name}_{Path(const_py).stem}", const_path)
 
     return main_mod, const_mod
@@ -74,7 +74,7 @@ def _try_import_project(project_dir_name: str, main_py: str, const_py: str = Non
 @contextmanager
 def _no_matplotlib_show():
     """
-    Empêche plt.show() d'ouvrir une fenêtre ou de bloquer (utile dans le GUI).
+    Prevents plt.show() from opening a window or blocking execution (useful within the GUI).
     """
     _orig_show = plt.show
     try:
@@ -85,8 +85,8 @@ def _no_matplotlib_show():
 
 def _concat_log_files(files):
     """
-    Concatène plusieurs logs en un seul fichier temporaire (garde l'ordre).
-    Retourne (path_to_use, temp_to_cleanup_or_None).
+    Merges multiple log files into a single temporary file (maintains order).
+    Returns (path_to_use, temp_to_cleanup_or_None).
     """
     if not files:
         raise ValueError("files is empty")
@@ -104,8 +104,6 @@ def _concat_log_files(files):
             out.write("\n")
 
     return tmp_path, tmp_path
-
-
 
 def analyze_pendulum_adapter(files, start_dt, end_dt, mode="run", output_dir=None, gui_dir=None):
     """
@@ -146,9 +144,9 @@ def analyze_pendulum_adapter(files, start_dt, end_dt, mode="run", output_dir=Non
 
 def analyze_chliran_adapter(files, start_dt, end_dt, mode="run", output_dir=None, gui_dir=None):
     """
-    Chliran (SANS split dans le GUI):
-      - 'files' doit être une liste de fichiers split: log_YYYY-MM-DD_to_YYYY-MM-DD.txt
-      - on appelle directement Chliran_log/main_chliran.py
+    Chliran (WITHOUT split in the GUI):
+        - 'files' must be a list of split files: log_YYYY-MM-DD_to_YYYY-MM-DD.txt
+        - directly calls Chliran_log/main_chliran.py
     """
     if gui_dir is None:
         gui_dir = os.getcwd()
@@ -156,18 +154,18 @@ def analyze_chliran_adapter(files, start_dt, end_dt, mode="run", output_dir=None
     bad = [f for f in files if not os.path.basename(f).lower().startswith("log_")]
     if bad:
         raise ValueError(
-            "Chliran: les fichiers sélectionnés ne ressemblent pas à des fichiers split.\n"
-            "Tu dois d'abord exécuter split_log.py individuellement, puis sélectionner les fichiers log_*.txt.\n"
-            f"Exemples invalides: {', '.join(os.path.basename(x) for x in bad[:3])}"
+            "Chliran: The selected files do not appear to be split files.\n"
+            "You must first run split_log.py individually, then select the log_*.txt files.\n"
+            f"Invalid examples: {', '.join(os.path.basename(x) for x in bad[:3])}"
         )
 
     main_path = _find_project_file(gui_dir, "Chliran_log", "main_chliran.py")
     if not main_path:
-        raise ImportError("main_chliran.py introuvable (dossier Chliran_log pas à côté du GUI).")
+        raise ImportError("main_chliran.py not found (Chliran_log folder is not in the GUI directory).")
 
     main_mod = _load_module_from_file_compat("Chliran_main", main_path)
 
-    # Run: éviter DOWNLOAD_DIR="" (WinError 3)
+    # Run: avoid DOWNLOAD_DIR="" (WinError 3)
     if mode != "save":
         try:
             const_path = _find_project_file(gui_dir, "Chliran_log", "CONST_n_PLOT.py")

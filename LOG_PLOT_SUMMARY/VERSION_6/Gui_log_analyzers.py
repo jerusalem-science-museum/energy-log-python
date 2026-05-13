@@ -34,7 +34,7 @@ class LogAnalyzerGUI:
         self.root.title("Log Analyzer")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # états
+        # states
         self.log_file_paths = []
         self.file_name_var = tk.StringVar(value="No files selected")
         self.start_date = tk.StringVar()
@@ -44,7 +44,7 @@ class LogAnalyzerGUI:
         self.interval = tk.StringVar(value="day")
         self.exhibits = tk.StringVar(value="Horsepower")
 
-        # ce qu'on garde du dernier run
+        # What is kept from the last run
         self.last_figure = None
         self.last_result = None
         self.last_project_name = None
@@ -59,7 +59,7 @@ class LogAnalyzerGUI:
     def create_widgets(self):
         padding = {'padx': 10, 'pady': 5}
 
-        # fichier
+        # file
         ttk.Label(self.root, text="Log File(s):").grid(row=0, column=0, sticky="w", **padding)
         self.log_file_path_label = ttk.Label(self.root, text="No file selected", width=50)
         self.log_file_path_label.grid(row=0, column=1, sticky="w", **padding)
@@ -181,7 +181,7 @@ class LogAnalyzerGUI:
             messagebox.showerror("No file", "Please select at least one log file.")
             return
 
-        # config events (projets "classiques")
+        # Event configuration ("classic" projects)
         event_config = {
             "Rocket Hydrogen": "The rocket has ignited",
             "Horsepower": "your horsepower is",
@@ -208,7 +208,7 @@ class LogAnalyzerGUI:
             messagebox.showinfo("No Data", "No data found in the specified time range.")
             return
 
-        # affiche plot
+        # Display plot
         if fig is not None:
             self.handle_plot_result(fig)
         else:
@@ -229,7 +229,7 @@ class LogAnalyzerGUI:
             else:
                 return
 
-        # détruire ancienne fenêtre
+        # Destroy previous window
         if self.plot_window is not None and tk.Toplevel.winfo_exists(self.plot_window):
             self.plot_window.destroy()
 
@@ -247,11 +247,11 @@ class LogAnalyzerGUI:
 
     def save_both(self):
         """
-        1. L'utilisateur choisit un dossier parent
-        2. On crée dedans un dossier {project}_{DD_MM}_to_{DD_MM}
-        3. On met dedans:
-           - (classiques) PNG + summary TXT
-           - (Pendulum / Chliran) ce que leurs scripts sauvegardent (Excel + plots + summary)
+        1. The user selects a parent folder
+        2. A folder is created inside: {project}_{DD_MM}_to_{DD_MM}
+        3. The following are saved inside:
+            - (Classic projects) PNG plot + summary TXT
+            - (Pendulum / Chliran) files saved by their specific scripts (Excel + plots + summary)
         """
         if self.last_project_name is None or self.last_start_dt is None or self.last_end_dt is None:
             messagebox.showerror("Save", "No analysis to save.")
@@ -299,8 +299,6 @@ class LogAnalyzerGUI:
         self.root.quit()
         self.root.destroy()
 
-    
-
 if __name__ == "__main__":
     root = tk.Tk()
     window_width = 650
@@ -311,6 +309,5 @@ if __name__ == "__main__":
     y = int((screen_height - window_height) / 2)
     root.geometry(f"{window_width}x{window_height}+{x}+{y}")
    
-
     app = LogAnalyzerGUI(root)
     root.mainloop()
