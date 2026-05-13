@@ -109,9 +109,9 @@ def _concat_log_files(files):
 
 def analyze_pendulum_adapter(files, start_dt, end_dt, mode="run", output_dir=None, gui_dir=None):
     """
-    Pendulum (SANS split dans le GUI):
-      - 'files' doit être une liste de fichiers split: log_YYYY-MM-DD_to_YYYY-MM-DD.txt
-      - on appelle directement Pendulum_log/main_pendulum.py
+    Pendulum (WITHOUT split in the GUI):
+      - 'files' must be a list of split files: log_YYYY-MM-DD_to_YYYY-MM-DD.txt
+      - directly calls Pendulum_log/main_pendulum.py
     """
     if gui_dir is None:
         gui_dir = os.getcwd()
@@ -119,14 +119,14 @@ def analyze_pendulum_adapter(files, start_dt, end_dt, mode="run", output_dir=Non
     bad = [f for f in files if not os.path.basename(f).lower().startswith("log_")]
     if bad:
         raise ValueError(
-            "Pendulum: les fichiers sélectionnés ne ressemblent pas à des fichiers split.\n"
-            "Tu dois d'abord exécuter split_log.py individuellement, puis sélectionner les fichiers log_*.txt.\n"
-            f"Exemples invalides: {', '.join(os.path.basename(x) for x in bad[:3])}"
+            "Pendulum: The selected files do not appear to be split files.\n"
+            "You must first run 'split_log.py' individually, then select the 'log_*.txt' files.\n"
+            f"Invalid examples: {', '.join(os.path.basename(x) for x in bad[:3])}"
         )
 
     main_path = _find_project_file(gui_dir, "Pendulum_log", "main_pendulum.py")
     if not main_path:
-        raise ImportError("main_pendulum.py introuvable (dossier Pendulum_log pas à côté du GUI).")
+        raise ImportError("Could not find 'main_pendulum.py' (Pendulum_log folder not found next to GUI).")
 
     main_mod = _load_module_from_file_compat("Pendulum_main", main_path)
 
