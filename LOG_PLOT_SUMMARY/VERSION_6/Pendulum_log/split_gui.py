@@ -52,7 +52,7 @@ root = tk.Tk()
 root.title("Science Museum - Pendulum Log Splitter")
 root.geometry("550x450")
 
-tk.Label(root, text="Log File Splitter", font=("Arial", 16, "bold")).pack(pady=10)
+tk.Label(root, text="Pendulum Log Splitter", font=("Arial", 16, "bold")).pack(pady=10)
 
 # בחירת קובץ
 tk.Label(root, text="Select Raw LOG file:").pack()

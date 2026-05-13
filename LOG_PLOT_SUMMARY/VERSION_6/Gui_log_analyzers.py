@@ -54,8 +54,6 @@ class LogAnalyzerGUI:
 
         self.create_widgets()
 
- 
-
     def create_widgets(self):
         padding = {'padx': 10, 'pady': 5}
 
@@ -108,7 +106,7 @@ class LogAnalyzerGUI:
                                  font=("Arial", 10, "bold"),
                                  wraplength=500)
 
-        exhibits_menu.bind("<<ComboboxSelected>>", self.check_pendulum_selection)
+        exhibits_menu.bind("<<ComboboxSelected>>", self.check_selection)
 
         # Create warning label (Hidden by default)
         self.pend_note = tk.Label(
@@ -123,21 +121,58 @@ class LogAnalyzerGUI:
         self.split_button = ttk.Button(
             self.root, 
             text="Open SPLIT_GUI Tool", 
-            command=self.open_split_tool
+            command=self.open_pendulum_split_tool
         )
 
-    def check_pendulum_selection(self, event=None):
-        if self.exhibits.get() == "Pendulum":
-            # Show the note
-            self.pend_note.grid(row=6, column=0, columnspan=4, pady=(10, 0))
-            # Show the button right under it
-            self.split_button.grid(row=7, column=0, columnspan=4, pady=5)
-        else:
-            # Hide both if another project is selected
-            self.pend_note.grid_forget()
-            self.split_button.grid_forget()
+        # --- CHLIRAN Warning & Button ---
+        self.chliran_note = tk.Label(
+            self.root, 
+            text="⚠️ Note: Please run the Split Tool first, then select the generated daily log files (log_*.txt).",
+            fg="blue", 
+            font=("Arial", 10, "bold"),
+            wraplength=550
+        )
 
-    def open_split_tool(self):
+        self.chliran_split_button = ttk.Button(
+            self.root, 
+            text="Open CHLIRAN Split Tool", 
+            command=self.open_chliran_split_tool
+        )
+
+    def check_selection(self, event=None):
+        selection = self.exhibits.get()
+        
+        self.pend_note.grid_forget()
+        self.split_button.grid_forget()
+        self.chliran_note.grid_forget()
+        self.chliran_split_button.grid_forget()
+
+        if selection == "Pendulum":
+            self.pend_note.grid(row=6, column=0, columnspan=4, pady=(10, 0))
+            self.split_button.grid(row=7, column=0, columnspan=4, pady=5)
+            
+        elif selection == "Chliran": 
+            self.chliran_note.grid(row=6, column=0, columnspan=4, pady=(10, 0))
+            self.chliran_split_button.grid(row=7, column=0, columnspan=4, pady=5)
+
+    def open_chliran_split_tool(self):
+        """
+        Launches the Chliran-specific SPLIT GUI.
+        Uses sys.executable to ensure the same Python environment is used.
+        """
+        try:
+            # Construct path to the new Chliran split GUI
+            script_path = os.path.join(BASE_DIR, "Chliran_log", "split_gui_chliran.py")
+            
+            if os.path.exists(script_path):
+                # Launch as a separate process so it doesn't block the main GUI
+                subprocess.Popen([sys.executable, script_path])
+            else:
+                messagebox.showerror("File Error", f"Could not find: {script_path}")
+        except Exception as e:
+            messagebox.showerror("Launch Error", f"Failed to start Chliran Split Tool:\n{e}")
+
+    def open_pendulum_split_tool(self):
         """Launches the SPLIT_GUI script using the current Python interpreter."""
         try:
             # sys.executable ensures it uses the same Python version running the current script

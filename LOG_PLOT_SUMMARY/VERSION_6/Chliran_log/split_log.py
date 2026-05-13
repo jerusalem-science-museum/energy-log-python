@@ -176,7 +176,6 @@ def split_log_by_month_with_datetime(file_path: str, start_dt, end_dt, output_di
 
     print("✅ Terminé : plus de date qui recule, 09:00 seulement vraie nouvelle journée.")
 
-
 if __name__ == "__main__":
     split_log_by_month_with_datetime(
         file_path=r"C:\Users\nathans\Desktop\git_musee\Energy\chliran\LOG\LOG_DATA\2025_10_05_to_2026_02_09\LOG.TXT",
