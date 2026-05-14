@@ -5,14 +5,21 @@ A centralized Python GUI for analyzing and visualizing energy consumption logs f
 ## 🚀 Overview
 This tool allows museum staff to process raw logs from multiple sources—including **SD cards, Linux-based systems, and Raspberry Pi controllers**. 
 
-It splits raw data into organized daily/monthly files and generates analytical plots. The application serves as a wrapper for multiple sub-projects, ensuring a consistent workflow across different hardware exhibits and operating systems.
+It splits raw data into organized daily/monthly files and generates analytical plots.
 
 ## 📁 Project Structure
-\energy\energy-log-python\LOG_PLOT_SUMMARY\VERSION_6\
+LOG_PLOT_SUMMARY\VERSION_6\
 * **`LAUNCH_GUI.py`**: The main entry point. Use this to select exhibits and run analysis.
 * **`Chliran_log/`**: Contains logic and GUI for the Chliran exhibit logs.
 * **`Pendulum_log/`**: Contains logic and GUI for the Pendulum exhibit logs.
 * **`.bat` files**: Shortcut scripts to launch the tools directly on Windows without opening a terminal.
+
+LOG_HANDLER\logs_v3.py
+* this file should be copied to each project, then use
+```python
+from logs_v3 import get_logger
+logger = get_logger()
+```
 
 ## 🛠 Installation & Setup
 1.  **Requirement**: Ensure Python 3.10+ is installed.
