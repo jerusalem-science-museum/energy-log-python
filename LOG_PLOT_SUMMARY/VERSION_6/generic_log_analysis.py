@@ -202,10 +202,10 @@ def analyze_chliran_adapter(files, start_dt, end_dt, mode="run", output_dir=None
 
 def run_analysis_dispatch(files, start_dt, end_dt, interval, event_config, project_name):
     """
-    Point d'entrée unique pour le GUI.
-    Retourne (result_dict, fig)
-    - Pour projects "classiques" => result_dict = output analyze_logs, fig = plot_counts(...)
-    - Pour Pendulum/Chliran => result_dict = {"special":True,...}, fig = figure matplotlib créée par leur code
+    Single entry point for the GUI.
+    Returns (result_dict, fig)
+    - For "classic" projects => result_dict = output analyze_logs, fig = plot_counts(...)
+    - For Pendulum/Chliran => result_dict = {"special":True,...}, fig = matplotlib figure created by their code
     """
     proj = str(project_name).strip()
     if proj.lower() == "pendulum":
@@ -451,10 +451,10 @@ def _standardize_outputs(target_dir, proj, start_dt, end_dt):
 
 def save_analysis_dispatch(project_name, files, start_dt, end_dt, interval, target_dir, fig=None, result=None, event_config=None):
     """
-    Sauvegarde dans target_dir.
-    - Pendulum => appelle son analyse en mode save (Excel + plot + summary)
-    - Chliran => redirige DOWNLOAD_DIR puis appelle son analyse (Excel + plots + summary)
-    - Autres => sauvegarde fig + summary via write_summary_to_file (comme avant)
+    Saves analysis output into target_dir.
+    - Pendulum => calls its analysis in save mode (Excel + plot + summary)
+    - Chliran => redirects DOWNLOAD_DIR then calls its analysis (Excel + plots + summary)
+    - Others => saves fig + summary via write_summary_to_file
     """
     proj = str(project_name).strip()
     if proj.lower() == "pendulum":
@@ -467,7 +467,7 @@ def save_analysis_dispatch(project_name, files, start_dt, end_dt, interval, targ
         _standardize_outputs(target_dir, 'Chliran', start_dt, end_dt)
         return
 
-    # Cas "classiques"
+    # Classic projects case
     if fig is None or result is None:
         raise ValueError("fig/result manquants pour une sauvegarde classique.")
     start_md = start_dt.strftime("%d_%m")
@@ -535,9 +535,12 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
         "Starting Jumping Ring UI",
         "Starting Light a Fire UI"
     ]
-    #arduino_disconnect_keyword = "Error reading from serial, Arduino probably disconnected"
     arduino_disconnect_keyword = "Arduino disconnected. Trying to reconnect to Arduino..."
 
+    # --- Generic Charge Stats Lists ---
+    cmd_charges = []
+    charge_pattern = re.compile(r"Sent 'ignite' command to Arduino\. Charge:\s*([0-9.]+)")  
+    
     any_data_found = False
     first_dt = None
     last_dt = None
@@ -562,8 +565,15 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
                     if last_dt is None or timestamp > last_dt:
                         last_dt = timestamp
 
-                    time_key = get_time_key(timestamp, interval)
                     line_lower = line.lower()
+                    time_key = get_time_key(timestamp, interval)
+
+                    # --- Generic Charge Regex Matching ---
+                    # --- Generic Charge Regex Matching ---
+                    charge_match = charge_pattern.search(line)
+                    if charge_match:
+                        charge_val = float(charge_match.group(1))
+                        cmd_charges.append(charge_val)
 
                     for label, keyword in event_config.items():
                         if keyword.lower() in line_lower:
@@ -604,6 +614,14 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
     counters["Language: Hebrew"] = language_heb_counter
     counters["Language: Arabic"] = language_arb_counter
 
+    # --- Build Generic Charge Output ---
+    charge_stats = {
+        "max_charge": max(cmd_charges) if cmd_charges else 0.0,
+        "min_charge": min(cmd_charges) if cmd_charges else 0.0,
+        "avg_charge": (sum(cmd_charges) / len(cmd_charges)) if cmd_charges else 0.0,
+        "avg_cmd_charge": (sum(cmd_charges) / len(cmd_charges)) if cmd_charges else 0.0
+}
+
     return {
         "counters": counters,
         "First Timestamp": first_dt,
@@ -611,10 +629,9 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
         "project_name": project_name,
         "ui_restart_count": ui_restart_counter,
         "arduino_disconnect_count": arduino_disconnect_counter,
-        "Error parsing data": arduino_error_parsing_counter
+        "Error parsing data": arduino_error_parsing_counter,
+        "charge_stats": charge_stats  # Always included safely
     }
-
-
 
 def plot_counts(data_dict, interval):
     """
@@ -663,11 +680,10 @@ def plot_counts(data_dict, interval):
     print("✅ Figure créée (non sauvegardée)")
     return fig
 
-
 def write_summary_to_file(data_dict, interval, start_dt, end_dt, filename):
     """
-    Même résumé que write_summary original,
-    mais on écrit DANS filename (choisi par le GUI).
+    Same as the original write_summary, but outputs directly into the 
+    specified filename and integrates Max, Min, and Avg Charge statistics.
     """
     def total(counter):
         return sum(counter.values())
@@ -689,7 +705,6 @@ def write_summary_to_file(data_dict, interval, start_dt, end_dt, filename):
         total_intervals = int(delta.total_seconds() // 3600) + 1
     else:
         total_intervals = 1  # fallback
-
 
     ring_total = total(counters.get(project_name, defaultdict(int)))
     eng_total = total(counters.get("Language: English", defaultdict(int)))
@@ -723,6 +738,17 @@ def write_summary_to_file(data_dict, interval, start_dt, end_dt, filename):
             f.write(f"Average arabic language per {interval}: {arb_avg:.2f}\n")
             f.write(f"Average total language changes per {interval}: {total_langs_avg:.2f}\n\n")
             f.write(f"Good runs: {ring_total} / {denom} ({good_runs_pct:.2f}%)\n")
+
+        # ====================================================
+        # Rocket Charge Statistics Section (Max, Min, and Avg)
+        # ====================================================
+        if "charge_stats" in data_dict and project_name == "Rocket Hydrogen":
+            stats = data_dict["charge_stats"]
+            f.write("\n--- Rocket Charge Analysis (Coulombs) ---\n")
+            f.write(f"Maximum Charge recorded: {stats.get('max_charge', 0.0):.2f} Coul\n")
+            f.write(f"Minimum Charge recorded: {stats.get('min_charge', 0.0):.2f} Coul\n")
+            f.write(f"Average Charge overall:  {stats.get('avg_charge', 0.0):.2f} Coul\n")
+            f.write(f"Average Charge (Ignite Command):  {stats.get('avg_cmd_charge', 0.0):.2f} Coul\n")
 
         f.write("\n---\n")
         f.write(f"UI restarts between 09:30 and 18:00: {ui_restart_count}\n")
