@@ -540,7 +540,7 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
     # --- Generic Charge Stats Lists ---
     cmd_charges = []
     charge_pattern = re.compile(r"Sent 'ignite' command to Arduino\. Charge:\s*([0-9.]+)")  
-    
+
     any_data_found = False
     first_dt = None
     last_dt = None
@@ -568,7 +568,6 @@ def analyze_logs(files, start_dt, end_dt, interval, event_config, project_name):
                     line_lower = line.lower()
                     time_key = get_time_key(timestamp, interval)
 
-                    # --- Generic Charge Regex Matching ---
                     # --- Generic Charge Regex Matching ---
                     charge_match = charge_pattern.search(line)
                     if charge_match:
